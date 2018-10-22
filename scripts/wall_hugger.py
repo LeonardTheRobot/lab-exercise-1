@@ -10,18 +10,21 @@ class WallHugger:
         rospy.Subscriber('base_scan', LaserScan, self.laser_callback)
         self.movement_publisher = rospy.Publisher('cmd_vel', Twist, queue_size=100)
 
-        self.lin_speed = 0.6
-        self.ang_speed = 0.75
+        self.lin_speed = 0.2
+        self.ang_speed = 0.5
         target_wall_distance = 1.0 # 1.0m
-        wall_hug_accuracy = 0.1 # +/- 0.1m
+        wall_hug_accuracy = 0.2 # +/- 0.2m
         self.min_wall_distance = target_wall_distance - wall_hug_accuracy
         self.max_wall_distance = target_wall_distance + wall_hug_accuracy
 
     def laser_callback(self, laser_msg):
+        rospy.loginfo('laser_msg: {}'.format(laser_msg))
         # Array of all sensor readings ordered from right to left as per API
         laser_readings = np.array(laser_msg.ranges)
+        cleaned_readings = np.clip(laser_readings, laser_msg.range_min, laser_msg.range_max)
+        cleaned_readings[cleaned_readings == laser_msg.range_min] = np.nan
         # Split into 3 equal arrays of left, front and right laser readings
-        rights, fronts, lefts = np.split(laser_readings, 3)
+        rights, fronts, lefts = np.split(cleaned_readings, 3)
         # rospy.loginfo('L: {}, F: {}, R: {}'.format(lefts, fronts, rights))
 
         left = np.sort(lefts)[10]
@@ -31,7 +34,7 @@ class WallHugger:
 
         new_speed = Twist()
 
-        if front < 1.0 * self.min_wall_distance or min(laser_readings) < 0.5 * self.min_wall_distance:
+        if front < 1.0 * self.min_wall_distance or np.sort(cleaned_readings)[10] < 0.2:
             rospy.loginfo('OBSTRUCTED')
             new_speed.angular.z = self.ang_speed
         else:
